@@ -1,0 +1,11 @@
+---
+
+prometheus_bin: "/opt/kube-prometheus"
+# Configure nginx ingress controller
+config_ingress: "yes"
+# Release of kube-prometheus to install
+release_tag: v0.11.0
+# Release of jb to install
+jb_release: release-0.7
+# Kubernetes namespace to install kube-prometheus to
+kube_namespace: monitoring
