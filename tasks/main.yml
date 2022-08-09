@@ -26,10 +26,12 @@
 
 - name: Add helm repo
   ansible.builtin.command: helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
-  tags: helm
+  register: helm_result
+  changed_when: "'skipping' not in helm_result.stdout"
 
 - name: helm repo update
   ansible.builtin.command: helm repo update
+  changed_when: false
   tags: helm
 
 - name: Test if {{ kube_namespace }} namespace already exists
@@ -64,52 +66,71 @@
   tags: git
 
 # Customize Kube-Prometheus
+- name: Check for existing Go packages
+  ansible.builtin.command: "ls {{ go_root }}/bin"
+  register: go_binaries
+  changed_when: false
+
 - name: Install Jsonnet-bundler
-  ansible.builtin.shell:
-    GO111MODULE="on" {{ go_path }} get github.com/jsonnet-bundler/jsonnet-bundler/cmd/jb
+  ansible.builtin.command:
+    "{{ go_path }} get github.com/jsonnet-bundler/jsonnet-bundler/cmd/jb"
+  when: "'jb' not in go_binaries.stdout"
 
 - name: Install gojasontoyaml
   ansible.builtin.command:
     "{{ go_path }} get github.com/brancz/gojsontoyaml"
+  when: "'gojsontoyaml' not in go_binaries.stdout"
 
 - name: Install go-jsonett
   ansible.builtin.command:
     "{{ go_path }} get github.com/google/go-jsonnet/cmd/jsonnet"
+  when: "'jsonnet' not in go_binaries.stdout"
 
 - name: Create directory for customized kube-prometheus
   ansible.builtin.file:
     path: "{{ prometheus_bin }}/my-kube-prometheus"
     mode: '644'
     state: directory
+  register: mydir
 
 - name: Initialize the jsonnetfile.json file
   ansible.builtin.command:
     "chdir={{ prometheus_bin }}/my-kube-prometheus {{ jb_path }} init"
   register: cmd_result
+  when: mydir.changed
   failed_when: cmd_result.rc >= 2
 
-- name: Create "vendor" file
+- name: Create "vendor" content
   ansible.builtin.command:
     "chdir={{ prometheus_bin }}/my-kube-prometheus {{ jb_path }} install github.com/prometheus-operator/kube-prometheus/jsonnet/kube-prometheus@{{ jb_release }}"
   register: cmd_result
   failed_when: cmd_result.rc >= 2
+
+- name: Get directory contents for {{ prometheus_bin }}/my-kube-prometheus
+  ansible.builtin.command: ls {{ prometheus_bin }}/my-kube-prometheus
+  register: kube_dir_contents
+  changed_when: false
 
 - name: Download example.json file
   ansible.builtin.get_url:
     url: https://raw.githubusercontent.com/prometheus-operator/kube-prometheus/{{ jb_release }}/example.jsonnet
     dest: "{{ prometheus_bin }}/my-kube-prometheus/example.jsonnet"
     mode: '644'
+  when: "'example.jsonnet' not in kube_dir_contents.stdout"
 
 - name: Download build.sh file
   ansible.builtin.get_url:
     url: https://raw.githubusercontent.com/prometheus-operator/kube-prometheus/{{ jb_release }}/build.sh
     dest: "{{ prometheus_bin }}/my-kube-prometheus/build.sh"
     mode: '644'
+  when: "'build.sh' not in kube_dir_contents.stdout"
+  register: build_script
 
 - name: Make build.sh executable
   ansible.builtin.file:
     dest: "{{ prometheus_bin }}/my-kube-prometheus/build.sh"
     mode: +x
+  when: build_script.changed
 
 # Add PVC to Prometheus pods
 - name: Customize the Prometheus configuration
@@ -195,8 +216,12 @@
   tags: customize
 
 # Install the customizes manifests
+# Install the customizes manifests
 - name: Create the namespace and CRDs
   ansible.builtin.command: kubectl create -f {{ prometheus_bin }}/my-kube-prometheus/manifests/setup
+  register: kubectl_output
+  failed_when: kubectl_output.rc > 1
+  changed_when: "'AlreadyExists' not in kubectl_output.stderr"
   tags:
     - prom_install
 
@@ -216,5 +241,8 @@
 
 - name: Install remaining kube-prometheus manifests
   ansible.builtin.command: kubectl create -f {{ prometheus_bin }}/my-kube-prometheus/manifests/
+  register: kubectl_output
+  failed_when: kubectl_output.rc > 1
+  changed_when: "'AlreadyExists' not in kubectl_output.stderr"
   tags:
     - prom_install
