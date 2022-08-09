@@ -47,7 +47,9 @@
   tags: namespace
 
 - name: Test if NginX is already installed
-  ansible.builtin.shell: helm list -n {{ kube_namespace }} | grep nginx
+  ansible.builtin.shell:
+    cmd: |
+      helm list -n {{ kube_namespace }} | grep nginx
   register: nginx_test
   changed_when: false
   failed_when: nginx_test.rc >= 2
@@ -95,14 +97,18 @@
 
 - name: Initialize the jsonnetfile.json file
   ansible.builtin.command:
-    "chdir={{ prometheus_bin }}/my-kube-prometheus {{ jb_path }} init"
+    "{{ jb_path }} init"
+  args:
+    chdir: "{{ prometheus_bin }}/my-kube-prometheus"
   register: cmd_result
   when: mydir.changed
   failed_when: cmd_result.rc >= 2
 
 - name: Create "vendor" content
   ansible.builtin.command:
-    "chdir={{ prometheus_bin }}/my-kube-prometheus {{ jb_path }} install github.com/prometheus-operator/kube-prometheus/jsonnet/kube-prometheus@{{ jb_release }}"
+    "{{ jb_path }} install github.com/prometheus-operator/kube-prometheus/jsonnet/kube-prometheus@{{ jb_release }}"
+  args:
+    chdir: "{{ prometheus_bin }}/my-kube-prometheus"
   register: cmd_result
   failed_when: cmd_result.rc >= 2
 
@@ -162,7 +168,9 @@
 
 - name: Build custom manifests
   ansible.builtin.command:
-    "chdir={{ prometheus_bin }}/my-kube-prometheus ./build.sh example.jsonnet"
+    "./build.sh example.jsonnet"
+  args:
+    chdir: "{{ prometheus_bin }}/my-kube-prometheus"
   environment:
     PATH: /root/go/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
   tags: go
