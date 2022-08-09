@@ -45,7 +45,7 @@
   tags: namespace
 
 - name: Test if NginX is already installed
-  ansible.builtin.shell: set -o pipefail && helm list -n {{ kube_namespace }} | grep nginx
+  ansible.builtin.shell: helm list -n {{ kube_namespace }} | grep nginx
   register: nginx_test
   changed_when: false
   failed_when: nginx_test.rc >= 2
