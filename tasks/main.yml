@@ -68,6 +68,12 @@
   tags: git
 
 # Customize Kube-Prometheus
+- name: Make directory for Go packages
+  ansible.builtin.file:
+    path: "{{ go_root }}/bin"
+    state: directory
+    mode: '644'
+
 - name: Check for existing Go packages
   ansible.builtin.command: "ls {{ go_root }}/bin"
   register: go_binaries
