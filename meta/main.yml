@@ -21,4 +21,4 @@ galaxy_info:
     - monitoring
 
 dependencies:
-  - role: golang_install
+  - role: jedimt.golang_install
