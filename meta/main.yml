@@ -1,6 +1,7 @@
 galaxy_info:
-  author: Aaron Patten
-  description: Install kube-prometheus with persistent volumes
+  author: jedimt
+  role_name: kube_prometheus
+  description: Install kube-prometheus project with persistent volumes
 
   license: MIT
 
@@ -13,9 +14,11 @@ galaxy_info:
         - xenial
         - jammy
 
-  galaxy_tags: 
-    - kube-prometheus
+  galaxy_tags:
+    - prometheus
+    - kubeprometheus
     - kubernetes
     - monitoring
 
-dependencies: []
+dependencies:
+  - role: golang_install
