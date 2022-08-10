@@ -1,6 +1,6 @@
 galaxy_info:
   author: jedimt
-  role_name: kube_prometheus
+  role_name: kubernetes_kube_prometheus
   description: Install kube-prometheus project with persistent volumes
 
   license: MIT
