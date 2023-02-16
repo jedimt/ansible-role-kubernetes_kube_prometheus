@@ -1,6 +1,6 @@
 ---
 
-- name: set facts for golang
+- name: Set facts for golang
   ansible.builtin.set_fact:
     go_path: "/usr/local/go/bin/go"
     go_root: "$HOME/go"
@@ -16,32 +16,37 @@
     flat: true
   tags: kubeconfig
 
-- name: set kubeconfig location
+- name: Set kubeconfig location
   ansible.builtin.set_fact:
-    kubeconfig=~/.kube/{{ inventory_hostname }}-config
+    kubeconfig: ~/.kube/{{ inventory_hostname }}-config
   changed_when: false
   tags:
     - kubeconfig
     - prom_install
 
-- name: Add helm repo
-  ansible.builtin.command: helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
-  register: helm_result
-  changed_when: "'skipping' not in helm_result.stdout"
+- name: Add nginx stable chart repo
+  kubernetes.core.helm_repository:
+    name: nginx-stable
+    repo_url: "https://helm.nginx.com/stable"
+  tags: helm_update
 
-- name: helm repo update
-  ansible.builtin.command: helm repo update
-  changed_when: false
-  tags: helm
+- name: Update the Helm repository cache
+  kubernetes.core.helm:
+    name: nginx-ingress
+    namespace: "{{ kube_namespace }}"
+    chart_ref: nginx-stable/nginx-ingress
+    state: present
+    update_repo_cache: true
+  tags: helm_update
 
-- name: Test if {{ kube_namespace }} namespace already exists
+- name: Test for existing namespace {{ kube_namespace }}
   ansible.builtin.command: kubectl get ns
   register: namespace_test
   changed_when: false
   tags:
     - namespace
 
-- name: create {{ kube_namespace }} namespace
+- name: Create namespace {{ kube_namespace }}
   ansible.builtin.command: kubectl create ns {{ kube_namespace }}
   when: "kube_namespace not in namespace_test.stdout"
   tags: namespace
@@ -56,7 +61,8 @@
   tags: namespace
 
 - name: Install NginX
-  ansible.builtin.command: helm install ingress-nginx ingress-nginx/ingress-nginx --namespace {{ kube_namespace }}
+  ansible.builtin.command:
+    helm install ingress-nginx ingress-nginx/ingress-nginx --namespace {{ kube_namespace }}
   when: "'nginx' not in nginx_test.stdout"
   tags: namespace
 
@@ -94,12 +100,23 @@
     "{{ go_path }} get github.com/google/go-jsonnet/cmd/jsonnet"
   when: "'jsonnet' not in go_binaries.stdout"
 
+- name: Test for existing my-kube-prometheus directory
+  ansible.builtin.stat:
+    path: "{{ prometheus_bin }}/my-kube-prometheus"
+  register: directory_created
+
 - name: Create directory for customized kube-prometheus
   ansible.builtin.file:
     path: "{{ prometheus_bin }}/my-kube-prometheus"
     mode: '644'
     state: directory
   register: mydir
+  when: not directory_created.stat.exists
+
+- name: Check for existing jsonnetfile.json file
+  ansible.builtin.stat:
+    path: "{{ prometheus_bin }}/my-kube-prometheus/jsonnetfile.json"
+  register: jsonnetfile_created
 
 - name: Initialize the jsonnetfile.json file
   ansible.builtin.command:
@@ -107,8 +124,13 @@
   args:
     chdir: "{{ prometheus_bin }}/my-kube-prometheus"
   register: cmd_result
-  when: mydir.changed
-  failed_when: cmd_result.rc >= 2
+  when: not jsonnetfile_created.stat.exists
+
+- name: Get directory contents for my-kube-prometheus
+  ansible.builtin.command:
+    ls {{ prometheus_bin }}/my-kube-prometheus
+  register: kube_dir_contents
+  changed_when: false
 
 - name: Create "vendor" content
   ansible.builtin.command:
@@ -116,12 +138,7 @@
   args:
     chdir: "{{ prometheus_bin }}/my-kube-prometheus"
   register: cmd_result
-  failed_when: cmd_result.rc >= 2
-
-- name: Get directory contents for {{ prometheus_bin }}/my-kube-prometheus
-  ansible.builtin.command: ls {{ prometheus_bin }}/my-kube-prometheus
-  register: kube_dir_contents
-  changed_when: false
+  when: "'vendor' not in kube_dir_contents.stdout"
 
 - name: Download example.json file
   ansible.builtin.get_url:
@@ -129,6 +146,12 @@
     dest: "{{ prometheus_bin }}/my-kube-prometheus/example.jsonnet"
     mode: '644'
   when: "'example.jsonnet' not in kube_dir_contents.stdout"
+
+- name: Check for existing build.sh script
+  ansible.builtin.stat:
+    path: "{{ prometheus_bin }}/my-kube-prometheus/build.sh"
+  register: build_exists
+  changed_when: false
 
 - name: Download build.sh file
   ansible.builtin.get_url:
@@ -142,7 +165,6 @@
   ansible.builtin.file:
     dest: "{{ prometheus_bin }}/my-kube-prometheus/build.sh"
     mode: +x
-  when: build_script.changed
 
 # Add PVC to Prometheus pods
 - name: Customize the Prometheus configuration
@@ -172,6 +194,11 @@
 
 # Customize the manifests for our needs
 
+- name: Check for existing manifests folder
+  ansible.builtin.stat:
+    path: "{{ prometheus_bin }}/my-kube-prometheus/manifests"
+  register: manifests_created
+
 - name: Build custom manifests
   ansible.builtin.command:
     "./build.sh example.jsonnet"
@@ -179,14 +206,15 @@
     chdir: "{{ prometheus_bin }}/my-kube-prometheus"
   environment:
     PATH: /root/go/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-  tags: go
+  when: not manifests_created.stat.exists
 
 - name: Check for 0namespace file
-  ansible.builtin.command: ls {{ prometheus_bin }}/my-kube-prometheus/manifests/setup
+  ansible.builtin.command:
+    ls {{ prometheus_bin }}/my-kube-prometheus/manifests/setup
   register: dir_test
   changed_when: false
 
-- name: remove the default namespace manifest
+- name: Remove the default namespace manifest
   ansible.builtin.file:
     path: "{{ prometheus_bin }}/my-kube-prometheus/manifests/setup/0namespace-namespace.yaml"
     state: absent
@@ -230,7 +258,7 @@
   tags: customize
 
 # Install the customizes manifests
-# Install the customizes manifests
+
 - name: Create the namespace and CRDs
   ansible.builtin.command: kubectl create -f {{ prometheus_bin }}/my-kube-prometheus/manifests/setup
   register: kubectl_output
@@ -240,7 +268,8 @@
     - prom_install
 
 - name: Wait for CRDs to be available
-  ansible.builtin.shell: kubectl get customresourcedefinition {{ item }}.monitoring.coreos.com > /dev/null 2>&1
+  ansible.builtin.shell:
+    kubectl get customresourcedefinition {{ item }}.monitoring.coreos.com > /dev/null 2>&1
   register: crd_check
   until: crd_check.rc == 0
   retries: 30
@@ -254,7 +283,8 @@
     - prom_install
 
 - name: Install remaining kube-prometheus manifests
-  ansible.builtin.command: kubectl create -f {{ prometheus_bin }}/my-kube-prometheus/manifests/
+  ansible.builtin.command:
+    kubectl create -f {{ prometheus_bin }}/my-kube-prometheus/manifests/
   register: kubectl_output
   failed_when: kubectl_output.rc > 1
   changed_when: "'AlreadyExists' not in kubectl_output.stderr"
