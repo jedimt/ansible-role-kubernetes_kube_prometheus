@@ -24,10 +24,32 @@
     - kubeconfig
     - prom_install
 
+- name: Test for existing namespace {{ kube_namespace }}
+  ansible.builtin.command: kubectl get ns
+  register: namespace_test
+  changed_when: false
+  tags:
+    - prom_namespace
+
+- name: Create namespace {{ kube_namespace }}
+  ansible.builtin.command: kubectl create ns {{ kube_namespace }}
+  when: "kube_namespace not in namespace_test.stdout"
+  tags: prom_namespace
+
+- name: Test if NginX is already installed
+  ansible.builtin.shell:
+    cmd: |
+      helm list -n {{ kube_namespace }} | grep nginx
+  register: nginx_test
+  changed_when: false
+  failed_when: nginx_test.rc >= 2
+  tags: prom_namespace
+
 - name: Add nginx stable chart repo
   kubernetes.core.helm_repository:
     name: nginx-stable
     repo_url: "https://helm.nginx.com/stable"
+  when: "'nginx' not in nginx_test.stdout"
   tags: helm_update
 
 - name: Update the Helm repository cache
@@ -37,34 +59,24 @@
     chart_ref: nginx-stable/nginx-ingress
     state: present
     update_repo_cache: true
+  when: "'nginx' not in nginx_test.stdout"
   tags: helm_update
 
-- name: Test for existing namespace {{ kube_namespace }}
-  ansible.builtin.command: kubectl get ns
-  register: namespace_test
-  changed_when: false
-  tags:
-    - namespace
+# - name: Install NginX
+#   ansible.builtin.command:
+#     helm install nginx-ingress nginx-stable/nginx-ingress --namespace {{ kube_namespace }}
+#   when: "'nginx' not in nginx_test.stdout"
+#   tags: namespace
 
-- name: Create namespace {{ kube_namespace }}
-  ansible.builtin.command: kubectl create ns {{ kube_namespace }}
-  when: "kube_namespace not in namespace_test.stdout"
-  tags: namespace
-
-- name: Test if NginX is already installed
-  ansible.builtin.shell:
-    cmd: |
-      helm list -n {{ kube_namespace }} | grep nginx
-  register: nginx_test
-  changed_when: false
-  failed_when: nginx_test.rc >= 2
-  tags: namespace
-
-- name: Install NginX
-  ansible.builtin.command:
-    helm install ingress-nginx ingress-nginx/ingress-nginx --namespace {{ kube_namespace }}
-  when: "'nginx' not in nginx_test.stdout"
-  tags: namespace
+- name: Deploy NginX helm chart
+  kubernetes.core.helm:
+    name: nginx-ingress
+    chart_ref: nginx-stable/nginx-ingress
+    release_namespace: monitoring
+    create_namespace: true
+  register: nginx_installed
+  until: nginx_installed is success
+  tags: helm_nginx
 
 - name: Clone kube-prometheus repo
   ansible.builtin.git:
