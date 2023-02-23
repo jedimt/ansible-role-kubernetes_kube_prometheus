@@ -9,21 +9,6 @@
     jsonnet_path: "/root/go/bin/jsonnet"
   tags: go
 
-- name: Copy kubeconfig to local machine
-  ansible.builtin.fetch:
-    src: /etc/kubernetes/admin.conf
-    dest: ~/.kube/{{ inventory_hostname }}-config
-    flat: true
-  tags: kubeconfig
-
-- name: Set kubeconfig location
-  ansible.builtin.set_fact:
-    kubeconfig: ~/.kube/{{ inventory_hostname }}-config
-  changed_when: false
-  tags:
-    - kubeconfig
-    - prom_install
-
 - name: Test for existing namespace {{ kube_namespace }}
   ansible.builtin.command: kubectl get ns
   register: namespace_test
@@ -35,48 +20,6 @@
   ansible.builtin.command: kubectl create ns {{ kube_namespace }}
   when: "kube_namespace not in namespace_test.stdout"
   tags: prom_namespace
-
-- name: Test if NginX is already installed
-  ansible.builtin.shell:
-    cmd: |
-      helm list -n {{ kube_namespace }} | grep nginx
-  register: nginx_test
-  changed_when: false
-  failed_when: nginx_test.rc >= 2
-  tags: prom_namespace
-
-- name: Add nginx stable chart repo
-  kubernetes.core.helm_repository:
-    name: nginx-stable
-    repo_url: "https://helm.nginx.com/stable"
-  when: "'nginx' not in nginx_test.stdout"
-  tags: helm_update
-
-- name: Update the Helm repository cache
-  kubernetes.core.helm:
-    name: nginx-ingress
-    namespace: "{{ kube_namespace }}"
-    chart_ref: nginx-stable/nginx-ingress
-    state: present
-    update_repo_cache: true
-  when: "'nginx' not in nginx_test.stdout"
-  tags: helm_update
-
-# - name: Install NginX
-#   ansible.builtin.command:
-#     helm install nginx-ingress nginx-stable/nginx-ingress --namespace {{ kube_namespace }}
-#   when: "'nginx' not in nginx_test.stdout"
-#   tags: namespace
-
-- name: Deploy NginX helm chart
-  kubernetes.core.helm:
-    name: nginx-ingress
-    chart_ref: nginx-stable/nginx-ingress
-    release_namespace: monitoring
-    create_namespace: true
-  register: nginx_installed
-  until: nginx_installed is success
-  tags: helm_nginx
 
 - name: Clone kube-prometheus repo
   ansible.builtin.git:
