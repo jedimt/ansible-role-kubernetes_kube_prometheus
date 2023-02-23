@@ -20,5 +20,5 @@ galaxy_info:
     - kubernetes
     - monitoring
 
-# dependencies:
-#   - role: ansible-role-golang-install
+dependencies:
+  - role: ansible-role-golang-install
