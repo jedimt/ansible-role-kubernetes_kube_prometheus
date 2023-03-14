@@ -1,0 +1,7 @@
+# Directory to install kube-prometheus. Default is /opt/kube-prometheus
+
+# Kubernetes namespace to install kube-prometheus to
+kube_namespace: monitoring
+
+# Storage Class for persistent volumes
+storage_class:
