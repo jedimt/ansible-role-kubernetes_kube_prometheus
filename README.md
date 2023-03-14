@@ -52,7 +52,9 @@ Example Playbook
 
     roles:
         - { role: ansible-role-golang-install, go_version: 1.20.1 }
-        - ansible-role-kubernetes-kube-prometheus
+        - { role: ansible-role-kubernetes-kube-prometheus,
+            storage_class: "vmw-block-sc"
+        }
 
 License
 -------
