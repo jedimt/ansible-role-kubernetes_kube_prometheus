@@ -4,4 +4,4 @@
 kube_namespace: monitoring
 
 # Storage Class for persistent volumes
-storage_class:
+storage_class: 'nebulon-mirrored'
