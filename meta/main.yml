@@ -21,4 +21,4 @@ galaxy_info:
     - monitoring
 
 dependencies:
-  - role: ansible-role-golang-install
+  - role: jedimt.ansible-role-golang-install
