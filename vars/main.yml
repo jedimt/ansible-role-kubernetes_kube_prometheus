@@ -1,11 +1,5 @@
 ---
 
-# Directory to install kube-prometheus. Default is /opt/kube-prometheus
-prometheus_bin: "/opt/kube-prometheus"
-
-# Configure nginx ingress controller
-config_ingress: "yes"
-
 # Release of kube-prometheus to install
 release_tag: v0.12.0
 

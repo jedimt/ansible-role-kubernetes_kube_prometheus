@@ -5,3 +5,9 @@ kube_namespace: monitoring
 
 # Storage Class for persistent volumes
 storage_class: 'nebulon-mirrored'
+
+# Directory to install kube-prometheus. Default is /opt/kube-prometheus
+prometheus_bin: "/opt/kube-prometheus"
+
+# Configure nginx ingress controller
+config_ingress: "yes"

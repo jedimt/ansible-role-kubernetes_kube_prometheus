@@ -19,6 +19,3 @@ galaxy_info:
     - kubeprometheus
     - kubernetes
     - monitoring
-
-dependencies:
-  - role: jedimt.ansible-role-golang-install

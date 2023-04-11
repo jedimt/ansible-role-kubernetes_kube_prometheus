@@ -36,7 +36,7 @@ The kube-promethus role defines the following variables:
 Dependencies
 ------------
 
-This playbook depends on the `jedimt.ansible-role-golang-install` role and that an existing Kubernetes cluster is available.
+This playbook depends on the `jedimt.golang` role and that an existing Kubernetes cluster is available.
 
 Example Playbook
 ----------------
@@ -50,11 +50,11 @@ Example Playbook
       become: false
       tags: play_prometheus
 
-    roles:
-      - { role: ansible-role-golang-install, go_version: 1.20.1 }
-      - { role: ansible-role-kubernetes-kube-prometheus,
-          storage_class: "vmw-block-sc"
-      }
+      roles:
+        - { role: jedimt.golang, go_version: 1.20.1 }
+        - { role: jedimt.kubernetes_kube_prometheus,
+            storage_class: "vmw-block-sc"
+        }
 
 License
 -------
